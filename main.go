@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chzyer/readline"
 	"github.com/rhyspowell/pokedexcli/internal/pokecache"
 )
 
@@ -95,6 +95,7 @@ func commandHelp(cfg *config, args ...string) error {
 	fmt.Println("explore <location-area>: Lists the Pokemon in a location area")
 	fmt.Println("catch <pokemon>: Attempt to catch a Pokemon")
 	fmt.Println("inspect <pokemon>: Display information about a caught Pokemon")
+	fmt.Println("pokedex: Lists all caught Pokemon")
 	return nil
 }
 
@@ -316,6 +317,7 @@ func commandCatch(cfg *config, args ...string) error {
 		// Caught!
 		fmt.Printf("%s was caught!\n", pokemonName)
 		cfg.Pokedex[strings.ToLower(pokemonName)] = pokemon
+		fmt.Println("You may now inspect it with the inspect command.")
 	} else {
 		// Escaped!
 		fmt.Printf("%s escaped!\n", pokemonName)
@@ -347,6 +349,20 @@ func commandInspect(cfg *config, args ...string) error {
 	fmt.Println("Types:")
 	for _, t := range pokemon.Types {
 		fmt.Printf("  - %s\n", t.Type.Name)
+	}
+
+	return nil
+}
+
+func commandPokedex(cfg *config, args ...string) error {
+	if len(cfg.Pokedex) == 0 {
+		fmt.Println("Your Pokedex is empty.")
+		return nil
+	}
+
+	fmt.Println("Your Pokedex:")
+	for name := range cfg.Pokedex {
+		fmt.Printf(" - %s\n", name)
 	}
 
 	return nil
@@ -394,13 +410,36 @@ func main() {
 			description: "Display information about a caught Pokemon",
 			callback:    commandInspect,
 		},
+		"pokedex": {
+			name:        "pokedex",
+			description: "Lists all caught Pokemon",
+			callback:    commandPokedex,
+		},
 	}
 
-	scanner := bufio.NewScanner(os.Stdin)
+	rl, err := readline.New("Pokedex > ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error initializing readline: %v\n", err)
+		os.Exit(1)
+	}
+	defer rl.Close()
+
 	for {
-		fmt.Print("Pokedex > ")
-		scanner.Scan()
-		input := scanner.Text()
+		line, err := rl.Readline()
+		if err != nil {
+			if err == readline.ErrInterrupt {
+				continue
+			}
+			break
+		}
+
+		input := strings.TrimSpace(line)
+		if input == "" {
+			continue
+		}
+
+		// Add to history (readline handles this automatically, but we can also add it explicitly)
+		rl.SaveHistory(input)
 
 		cleaned := cleanInput(input)
 		if len(cleaned) > 0 {
